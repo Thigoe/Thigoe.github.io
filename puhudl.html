@@ -1,0 +1,98 @@
+<html>
+   <head>
+      <meta charset="UTF-8">
+      <style>*{font-family:Arial;}a{text-decoration:none;}</style>
+      <link rel="stylesheet" href="https://unpkg.com/purecss@0.6.2/build/forms-min.css">
+      <link rel="stylesheet" href="https://unpkg.com/purecss@0.6.2/build/buttons-min.css">
+      <title>puhutv Downloader</title>
+   </head>
+   <body>
+      <center>
+         <form method="post" class="pure-form">
+            puhutv Episode Link: <br><input type="text" id="link" placeholder="https://puhutv.com/cember-7-bolum-hayalet-gemi-izle" style="height:40px;width:400px;"><br>
+            <button id="download" type="submit" class="pure-button pure-input-1-2 pure-button-primary" style="width:100px;">Download</button>
+         </form>
+         <br>
+         <p id="log" style="font-size:70%;"></p>
+         <div id="videos"></div>
+         <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+         <script>
+            var hmacTries = 0;
+            $("#download").click(function(e){
+               e.preventDefault();
+               hmacTries = 0;
+               $(this).attr("disabled","disabled");
+               $("#videos").text("");
+               $("#log").text("");
+               $("#log").append("Fetching episode ID...<br>");
+               $.ajax({
+                  url: $("#link").val().replace("puhutv.com/", "puhutv.com/api/slug/"),
+                  dataType: "json",
+                  success: function(data){
+                     var episode_id = data.data.id;
+                     $("#log").append("Episode ID: "+episode_id+"<br>");
+                     if(!$.isNumeric(episode_id))
+                     {
+                        $("#log").append("<font color=\"red\">Error: Invalid episode ID. Please try again.</font><br>");
+                        $("#download").removeAttr("disabled");
+                        return;
+                     }
+
+                     $("#log").append("Fetching video list...<br>");
+                     retryHmac(episode_id, true);
+                  },
+                  error: function(xhr, status, error){
+                     $("#log").append("<font color=\"red\">Error: Can't get episode ID. Please try again.</font><br>");
+                     $("#download").removeAttr("disabled");
+                  }
+               });
+            });
+
+            function retryHmac(episode_id, first){
+                setTimeout(function(){
+                   if(getvideos(episode_id)){
+                       if(hmacTries > 20){
+                          $("#log").append("<font color=\"red\">Maximum retry count exceeded. Please try again.</font><br>");
+                       }
+                       $("#log").append("HMAC video link found, retrying...<br>");
+                       hmacTries++;
+                       retryHmac(episode_id, false);
+                   }
+                }, (first ? 10 : 100));
+            }
+
+            function getvideos(episode_id){
+               var hmac = false;
+               $.ajax({
+                  url: "https://puhutv.com/api/assets/"+episode_id+"/videos",
+                  dataType: "json",
+                  async: false,
+                  success: function(data){
+                     var videos = data.data.videos;
+                     for(var vidi in videos)
+                     {
+                        var vid = videos[vidi];
+                        if(vid.url.indexOf("hmac") !== -1)
+                        {
+                           hmac = true;
+                           return;
+                        }
+                        if(vid.url.indexOf("/mp4/") !== -1)
+                        {
+                           var quality = vid.url.split('/mp4/')[1].split('.mp4')[0];
+                           $("#videos").append('<a href="'+vid.url+'" target="_blank">'+ quality.replace('1080p', '<b>1080p</b>').replace('720p','<b>720p</b>').replace('1440p', '<b style="color:limegreen;">1440p</b>').replace('2160p', '<b style="color:limegreen;">2160p</b>') +'</a><br>');
+                        }
+                     }
+                     $("#download").removeAttr("disabled");
+                  },
+                  error: function(){
+                     $("#log").append("<font color=\"red\">Error: Can't get video list. Please try again.</font><br>");
+                     $("#download").removeAttr("disabled");
+                  }
+               });
+               return hmac;
+            }
+         </script>
+      </center>
+   </body>
+</html>
